@@ -279,7 +279,12 @@
   // email for education / non-profit use: https://carto.com/basemaps/apikey/
   // Paste your key between the quotes. If it is left empty the map falls back to OpenStreetMap's
   // public servers, which may show "Access blocked" tiles.
-  const TILE_KEY = 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_4snk_1_db2c16ecc994c9b777320bec';
+  const TILE_KEY = 'cb1_4snk_1_db2c16ecc994c9b777320bec';
+
+  // A location reported as less accurate than this (in metres) is treated as "rough": the page
+  // warns about it and does not centre the map on it. Typical phone GPS outdoors is 3-20 m;
+  // Wi-Fi positioning 20-150 m; mobile-network or internet-address positioning hundreds to thousands.
+  const ROUGH_ACCURACY = 150;
 
   const WALK_SPEED = 1.4;      // metres per second, used when no route time is available
   const ARRIVE_RADIUS = 20;    // metres from the building that counts as "arrived"
@@ -298,6 +303,42 @@
   const locations = [
     { name: "Administration Block", category: "admin", lat: -24.5914, lng: 25.9415,
       desc: "Main administrative offices, registrar, and student records." },
+    { name: "Lecture theater", category: "academic", lat: -24.5589550, lng: 25.939961,
+      desc: "Lecture attendance venue and other academic activities" },
+    { name: "TV Room", category: "academic", lat: -24.590233, lng: 25.940350,
+      desc: "Lecture attendance venue and other academic activities." },
+    { name: "Old exam hall", category: "academic", lat: -24.590492, lng: 25.940399,
+      desc: "Lecture attendance venue and other academic activities." },
+    { name: "Food Processing Lab", category: "academic", lat: -24.590579, lng: 25.940378,
+      desc: "Lab Practical venue" },
+    { name: "Dark Room", category: "academic", lat: -24.590628, lng: 25.940197,
+      desc: "Lecture attendance venue and other academic activities." },
+    { name: "Security office", category: "welfare", lat: -24.590919, lng: 25.940172,
+      desc: "Center  for all issues safety, security, lost and found items etc." },
+    { name: "314: Agric & Biosystems Engineering", category: "academic", lat: -24.590972, lng: 25.928488,
+      desc: "Lecture attendance venue and other academic activities." },
+    { name: "Tissue Culture lab", category: "academic", lat: -24.591568, lng: 25.937825,
+      desc: "Lab practical venue" },
+    { name: "SRC Blocks", category: "residence", lat: -24.590942, lng: 25.937394,
+      desc: "Residential blocks" },
+    { name: "Meat Lab", category: "academic", lat: -24.591820, lng: 25.937247,
+      desc: "Lab Practical Venue." },
+    { name: "Cafeteria", category: "welfare", lat: -24.590469, lng: 25.937227,
+      desc: "Centre for all food needs" },
+    { name: "Block 113", category: "Residence", lat: -24.589762, lng: 25.936955,
+      desc: "Student residences." },
+    { name: "New Blocks-Male", category: "residence", lat: -24.589779, lng: 25.935905,
+      desc: "Male student residences" },
+    { name: "New Blocks-Female", category: "residence", lat: -24.590200, lng: 25.935993,
+      desc: "Female student residences." },
+    { name: "Dubai", category: "leisure", lat: -24.590256, lng: 25.936231,
+      desc: "Venue for leisure events." },
+    { name: "Student Centre", category: "welfare", lat: -24.590510, lng: 25.936415,
+      desc: "Site for exams, health clinic and SRC offices." },
+    { name: "CICE", category: "academic", lat: -24.588935, lng: 25.940196,
+      desc: "Venue for short courses and seminars." },
+    { name: "Block 116-BBS", category: "residence", lat: -24.622611, lng: 25.935444,
+      desc: "Lecture attendance venue and other academic activities." },
     { name: "BUAN Library", category: "academic", lat: -24.5905, lng: 25.9405,
       desc: "Main university library, western side of campus." },
     { name: "Faculty of Food Science & Technology", category: "academic", lat: -24.5920, lng: 25.9428,
@@ -306,7 +347,7 @@
       desc: "On-campus student residence halls." },
     { name: "Sports Grounds", category: "sports", lat: -24.5900, lng: 25.9440,
       desc: "Football field and general sports facilities." },
-    { name: "Main Cafeteria", category: "services", lat: -24.5918, lng: 25.9422,
+    { name: "Cafeteria", category: "services", lat: -24.5918, lng: 25.9422,
       desc: "Central dining hall serving staff and students." },
     { name: "Teaching & Research Farm", category: "academic", lat: -24.5950, lng: 25.9390,
       desc: "Working farm used for agricultural teaching and research." },
@@ -473,493 +514,4 @@
   const campusOutline = CAMPUS_OUTLINE.length >= 3 ? CAMPUS_OUTLINE : [
     [CAMPUS_CORNERS[0][0], CAMPUS_CORNERS[0][1]],
     [CAMPUS_CORNERS[0][0], CAMPUS_CORNERS[1][1]],
-    [CAMPUS_CORNERS[1][0], CAMPUS_CORNERS[1][1]],
-    [CAMPUS_CORNERS[1][0], CAMPUS_CORNERS[0][1]]
-  ];
-  const campusBounds = L.latLngBounds(campusOutline);
-  const CAMPUS_CENTER = [campusBounds.getCenter().lat, campusBounds.getCenter().lng];
-
-  // Locked to the campus: no panning away, no zooming out past the whole campus
-  // zoomSnap 0.25 lets the campus fill the panel exactly instead of jumping to the next whole zoom level
-  const map = L.map('map', { maxBounds: campusBounds.pad(0.05), maxBoundsViscosity: 1.0, zoomSnap: 0.25 });
-
-  // Zoom at which the WHOLE campus is visible (the furthest out a visitor can zoom)
-  function containZoom() {
-    map.setMinZoom(0);
-    return map.getBoundsZoom(campusBounds);
-  }
-
-  // Default view: zoomed in just enough that the campus fills the whole panel, no grey margins.
-  // Visitors can still zoom out to see the entire campus.
-  function applyDefaultView() {
-    settingView = true;
-    map.invalidateSize();
-    const contain = containZoom();
-    const cover = map.getBoundsZoom(campusBounds, true);
-    map.setMinZoom(contain);
-    map.setView(campusBounds.getCenter(), Math.max(cover, contain), { animate: false });
-    settingView = false;
-  }
-  applyDefaultView();
-
-  // The panel can change size after the page loads (rotating the phone, the preview window
-  // settling, the on-screen keyboard). Re-fit the default view unless the visitor has
-  // already moved the map, and always keep the zoom limits correct.
-  let resizeTimer = null;
-  function onMapResized() {
-    if (!userMoved) { applyDefaultView(); return; }
-    settingView = true;
-    map.invalidateSize();
-    map.setMinZoom(containZoom());
-    settingView = false;
-  }
-  if (window.ResizeObserver) {
-    new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(onMapResized, 120); })
-      .observe(document.querySelector('.map-wrap'));
-  }
-
-  const tileKey = TILE_KEY.trim();
-  const TILE_SOURCE = tileKey ? {
-    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=' + encodeURIComponent(tileKey),
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  } : {
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  };
-  if (!tileKey) {
-    console.warn("No TILE_KEY set: using OpenStreetMap's public tile servers, which may block this site. See the background map settings at the top of the script.");
-  }
-
-  L.tileLayer(TILE_SOURCE.url, {
-    maxZoom: 19,
-    bounds: campusBounds.pad(0.3),     // don't download map tiles for areas outside the campus
-    referrerPolicy: 'strict-origin-when-cross-origin',   // sends the page address with tile requests, which providers require
-    attribution: TILE_SOURCE.attribution
-  }).addTo(map);
-
-  // Grey out everything outside the campus boundary (sits above the map, below pins and routes)
-  map.createPane('mask');
-  map.getPane('mask').style.zIndex = 350;
-  map.getPane('mask').style.pointerEvents = 'none';
-  L.polygon([[[-80, -360], [-80, 360], [80, 360], [80, -360]], campusOutline], {
-    pane: 'mask', stroke: false, fillColor: '#f9f5f2', fillOpacity: 1, interactive: false
-  }).addTo(map);
-  L.polygon(campusOutline, { color: '#e07030', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map);
-
-  const routeGroup = L.layerGroup().addTo(map);
-
-  // Heads-up while editing: a building outside the boundary would be hidden
-  locations.forEach(l => {
-    if (!campusBounds.contains([l.lat, l.lng])) console.warn('"' + l.name + '" is outside the campus boundary, so it will not show.');
-  });
-
-  function makeIcon(category) {
-    return L.divIcon({ className: '', html: '<div class="pin ' + category + '"></div>', iconSize: [28, 28], iconAnchor: [14, 28] });
-  }
-
-  function popupHTML(i) {
-    const loc = locations[i];
-    let dist = '';
-    if (userLocation) {
-      dist = '<div class="pd">' + formatDistance(haversine(userLocation.lat, userLocation.lng, loc.lat, loc.lng)) + ' from you</div>';
-    }
-    return '<div class="popup"><span class="tag">' + esc(loc.category) + '</span>' +
-           '<h3>' + esc(loc.name) + '</h3><p>' + esc(loc.desc) + '</p>' + dist +
-           '<button type="button" class="btn-primary sm" onclick="startNavigation(' + i + ')">Walk here &rarr;</button></div>';
-  }
-
-  const markers = locations.map((loc, i) => {
-    const m = L.marker([loc.lat, loc.lng], { icon: makeIcon(loc.category) }).addTo(map);
-    m.bindPopup(popupHTML(i));
-    return m;
-  });
-
-  map.on('dragstart', () => { following = false; userMoved = true; });
-  map.on('zoomstart', () => { if (!settingView) userMoved = true; });
-
-  // =====================================================================
-  // BROWSE LIST
-  // =====================================================================
-  const locList = document.getElementById('locList');
-  const searchBox = document.getElementById('searchBox');
-
-  function renderList() {
-    const term = searchBox.value.trim().toLowerCase();
-    const rows = [];
-    locations.forEach((loc, i) => {
-      const show = (activeCat === 'all' || loc.category === activeCat) && loc.name.toLowerCase().indexOf(term) > -1;
-      if (show) {
-        markers[i].addTo(map);
-        const d = userLocation ? haversine(userLocation.lat, userLocation.lng, loc.lat, loc.lng) : null;
-        rows.push({ i: i, d: d });
-      } else {
-        markers[i].remove();
-      }
-    });
-    if (userLocation) rows.sort((a, b) => a.d - b.d);   // nearest first once GPS is on
-
-    if (!rows.length) {
-      locList.innerHTML = '<p class="empty">No buildings match your search.</p>';
-      return;
-    }
-    locList.innerHTML = rows.map(r => {
-      const loc = locations[r.i];
-      const dist = r.d !== null ? '<span class="loc-dist">' + formatDistance(r.d) + '</span>' : '';
-      return '<div class="loc">' +
-        '<button type="button" class="loc-main" data-i="' + r.i + '">' +
-          '<div class="loc-name">' + esc(loc.name) + '</div>' +
-          '<div class="loc-meta"><i class="dot ' + esc(loc.category) + '"></i><span>' + esc(loc.category) + '</span>' + dist + '</div>' +
-        '</button>' +
-        '<button type="button" class="loc-go" data-go="' + r.i + '" aria-label="Directions to ' + esc(loc.name) + '">Go &rarr;</button>' +
-      '</div>';
-    }).join('');
-  }
-
-  function focusLocation(i) {
-    map.setView([locations[i].lat, locations[i].lng], 18);
-    markers[i].openPopup();
-  }
-
-  locList.addEventListener('click', e => {
-    const go = e.target.closest('[data-go]');
-    if (go) { startNavigation(+go.dataset.go); return; }
-    const main = e.target.closest('.loc-main');
-    if (main) focusLocation(+main.dataset.i);
-  });
-
-  document.getElementById('chips').addEventListener('click', e => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
-    activeCat = chip.dataset.cat;
-    renderList();
-  });
-
-  searchBox.addEventListener('input', renderList);
-
-  function refreshPopups() {
-    markers.forEach((m, i) => m.setPopupContent(popupHTML(i)));
-  }
-
-  // =====================================================================
-  // GPS (device location)
-  // =====================================================================
-  const gpsChip = document.getElementById('gpsChip');
-  const gpsText = document.getElementById('gpsText');
-  const recenterBtn = document.getElementById('recenterBtn');
-
-  function setStatus(text, kind) {
-    if (!text) { gpsChip.className = 'gps-chip'; return; }
-    gpsChip.className = 'gps-chip show ' + (kind || '');
-    gpsText.textContent = text;
-  }
-
-  function startTracking() {
-    if (watchId !== null) return true;
-    if (!('geolocation' in navigator)) {
-      setStatus('This browser cannot access GPS', 'err');
-      return false;
-    }
-    if (window.isSecureContext === false) {
-      setStatus('Location needs a secure (https) page', 'err');
-      return false;
-    }
-    setStatus('Finding your location...', 'wait');
-    watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
-      enableHighAccuracy: true, maximumAge: 2000, timeout: 20000
-    });
-    return true;
-  }
-
-  function stopTracking() {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-    userLocation = null;
-    pendingNavIdx = null;
-    lastRefreshPos = null;
-    following = false;
-    if (userMarker) { userMarker.remove(); userMarker = null; }
-    if (accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
-    recenterBtn.style.display = 'none';
-    endNavigation();
-    setStatus('');
-    refreshPopups();
-    renderList();
-  }
-
-  function onGeoError(err) {
-    pendingNavIdx = null;
-    if (err.code === 1) {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      setStatus('Location is blocked. Allow it for this site in your browser settings.', 'err');
-    } else if (err.code === 2) {
-      setStatus('Location unavailable. Check that GPS is switched on.', 'err');
-    } else {
-      setStatus('Still looking for a GPS signal... try moving outdoors.', 'wait');
-    }
-  }
-
-  function drawUser() {
-    const ll = [userLocation.lat, userLocation.lng];
-    if (!userMarker) {
-      userMarker = L.marker(ll, {
-        icon: L.divIcon({ className: '', html: '<div class="user-pin"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
-        zIndexOffset: 1000
-      }).addTo(map);
-      accuracyCircle = L.circle(ll, { radius: userLocation.accuracy, color: '#2563eb', weight: 1, fillColor: '#2563eb', fillOpacity: 0.1 }).addTo(map);
-    } else {
-      userMarker.setLatLng(ll);
-      accuracyCircle.setLatLng(ll);
-      accuracyCircle.setRadius(userLocation.accuracy);
-    }
-  }
-
-  function onPosition(pos) {
-    const first = !userLocation;
-    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy || 0 };
-    drawUser();
-    recenterBtn.style.display = 'flex';
-
-    const fromCampus = haversine(userLocation.lat, userLocation.lng, CAMPUS_CENTER[0], CAMPUS_CENTER[1]);
-    if (!campusBounds.contains([userLocation.lat, userLocation.lng])) {
-      setStatus('GPS on - you are outside the campus map (' + formatDistance(fromCampus) + ' away)', 'ok');
-    } else {
-      setStatus('GPS on - accurate to ' + Math.round(userLocation.accuracy) + ' m', 'ok');
-    }
-
-    // Refresh distances only when the visitor has moved a little, so open popups don't flicker
-    if (first || !lastRefreshPos || haversine(userLocation.lat, userLocation.lng, lastRefreshPos.lat, lastRefreshPos.lng) > 10) {
-      lastRefreshPos = { lat: userLocation.lat, lng: userLocation.lng };
-      refreshPopups();
-      renderList();
-    }
-
-    if (first) {
-      if (pendingNavIdx !== null) {
-        const i = pendingNavIdx;
-        pendingNavIdx = null;
-        startNavigation(i);
-      } else if (campusBounds.contains([userLocation.lat, userLocation.lng])) {
-        centreOnUser();
-      }
-    }
-
-    if (nav) updateNavigation();
-    if (nav && following) map.panTo([userLocation.lat, userLocation.lng]);
-  }
-
-  function centreOnUser() {
-    if (!userLocation) return;
-    following = true;
-    userMoved = true;   // this is a deliberate view now: a later resize must not snap back to the campus centre
-    map.setView([userLocation.lat, userLocation.lng], Math.max(map.getZoom(), 17));
-  }
-
-  document.getElementById('locateBtn').addEventListener('click', () => {
-    if (watchId === null) startTracking(); else centreOnUser();
-  });
-  recenterBtn.addEventListener('click', centreOnUser);
-  document.getElementById('gpsStop').addEventListener('click', stopTracking);
-
-  // =====================================================================
-  // WALKING DIRECTIONS (all shown on this page)
-  // =====================================================================
-  const browsePanel = document.getElementById('browsePanel');
-  const navPanel = document.getElementById('navPanel');
-  const nextStepEl = document.getElementById('nextStep');
-  const noticeEl = document.getElementById('navNotice');
-  const stepListEl = document.getElementById('stepList');
-
-  async function fetchRoute(from, to) {
-    const url = ROUTING_URL + from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat +
-                '?overview=full&geometries=geojson&steps=true';
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 9000);
-    try {
-      const res = await fetch(url, { signal: ctrl.signal });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data.code !== 'Ok' || !data.routes || !data.routes.length) throw new Error(data.code || 'No route');
-      return data.routes[0];
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  function startNavigation(i) {
-    map.closePopup();
-    if (!userLocation) {
-      pendingNavIdx = i;
-      if (!startTracking()) pendingNavIdx = null;
-      return;
-    }
-    const loc = locations[i];
-    nav = { idx: i, route: null, stepIdx: 1, lastFetch: 0, fetching: false, fallback: false, fitted: false, arrived: false, notice: '' };
-
-    document.getElementById('navTag').textContent = loc.category;
-    document.getElementById('navName').textContent = loc.name;
-    document.getElementById('navDesc').textContent = loc.desc;
-    document.getElementById('navDist').textContent = '\u2013';
-    document.getElementById('navEta').textContent = '\u2013';
-    nextStepEl.className = 'next-step';
-    nextStepEl.innerHTML = '<div class="ns-arrow">\u2022</div><div><div class="ns-text">Finding the best walking route...</div></div>';
-    noticeEl.hidden = true;
-    stepListEl.innerHTML = '';
-    browsePanel.hidden = true;
-    navPanel.hidden = false;
-    document.getElementById('sidebar').scrollTop = 0;
-
-    const far = haversine(userLocation.lat, userLocation.lng, loc.lat, loc.lng);
-    if (far > FAR_FROM_CAMPUS) {
-      nav.notice = 'You are about ' + formatDistance(far) + ' away, so you are probably not on campus yet. These walking directions are meant for use once you arrive.';
-      showNotice(nav.notice);
-    }
-    loadRoute();
-  }
-
-  function showNotice(text) {
-    noticeEl.textContent = text;
-    noticeEl.hidden = !text;
-  }
-
-  async function loadRoute() {
-    const mine = nav;
-    if (!mine || mine.fetching || !userLocation) return;
-    mine.fetching = true;
-    mine.lastFetch = Date.now();
-    const target = locations[mine.idx];
-    try {
-      const r = await fetchRoute({ lat: userLocation.lat, lng: userLocation.lng }, target);
-      if (nav !== mine) return;
-      mine.route = {
-        coords: r.geometry.coordinates.map(c => [c[1], c[0]]),
-        steps: (r.legs && r.legs[0] && r.legs[0].steps) || [],
-        distance: r.distance,
-        duration: r.duration
-      };
-      mine.fallback = false;
-      mine.stepIdx = 1;
-      drawRoute();
-      renderSteps();
-    } catch (e) {
-      if (nav !== mine) return;
-      mine.route = null;
-      mine.fallback = true;
-      drawFallbackLine();
-      stepListEl.innerHTML = '';
-      showNotice((mine.notice ? mine.notice + ' ' : '') + 'Turn-by-turn directions are not available right now. Follow the dashed orange line to the building.');
-    } finally {
-      mine.fetching = false;
-      if (nav === mine) updateNavigation();
-    }
-  }
-
-  function drawRoute() {
-    routeGroup.clearLayers();
-    const pts = nav.route.coords;
-    const dest = locations[nav.idx];
-    const user = [userLocation.lat, userLocation.lng];
-    const dashed = { color: '#e07030', weight: 4, opacity: 0.9, dashArray: '2,9' };
-    L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.95 }).addTo(routeGroup);
-    L.polyline(pts, { color: '#e07030', weight: 5, opacity: 1 }).addTo(routeGroup);
-    // If the route snaps to a road a little way from you or from the building, join the gap
-    if (haversine(user[0], user[1], pts[0][0], pts[0][1]) > 12) L.polyline([user, pts[0]], dashed).addTo(routeGroup);
-    const end = pts[pts.length - 1];
-    if (haversine(end[0], end[1], dest.lat, dest.lng) > 12) L.polyline([end, [dest.lat, dest.lng]], dashed).addTo(routeGroup);
-    if (!nav.fitted) {
-      nav.fitted = true;
-      following = false;
-      map.fitBounds(L.latLngBounds(pts.concat([user, [dest.lat, dest.lng]])), { padding: [50, 50] });
-    }
-  }
-
-  function drawFallbackLine() {
-    routeGroup.clearLayers();
-    const dest = locations[nav.idx];
-    const user = [userLocation.lat, userLocation.lng];
-    L.polyline([user, [dest.lat, dest.lng]], { color: '#e07030', weight: 4, opacity: 0.9, dashArray: '2,9' }).addTo(routeGroup);
-    if (!nav.fitted) {
-      nav.fitted = true;
-      following = false;
-      map.fitBounds(L.latLngBounds([user, [dest.lat, dest.lng]]), { padding: [50, 50] });
-    }
-  }
-
-  function renderSteps() {
-    const steps = nav.route.steps;
-    showNotice(nav.notice);
-    stepListEl.innerHTML = steps.map((s, i) => {
-      const len = s.maneuver && s.maneuver.type === 'arrive' ? '' : formatDistance(s.distance || 0);
-      return '<li data-s="' + i + '"><span class="arr">' + stepArrow(s) + '</span><span class="txt">' + esc(stepText(s)) + '</span><span class="len">' + len + '</span></li>';
-    }).join('');
-  }
-
-  function updateNavigation() {
-    if (!nav || !userLocation) return;
-    const dest = locations[nav.idx];
-    const straight = haversine(userLocation.lat, userLocation.lng, dest.lat, dest.lng);
-    const arriveAt = Math.max(ARRIVE_RADIUS, Math.min(userLocation.accuracy, 40));
-
-    if (straight <= arriveAt) {
-      nav.arrived = true;
-      document.getElementById('navDist').textContent = '0 m';
-      document.getElementById('navEta').textContent = '0 min';
-      nextStepEl.className = 'next-step arrived';
-      nextStepEl.innerHTML = '<div class="ns-arrow">\u2713</div><div><div class="ns-dist">You have arrived</div><div class="ns-text">' + esc(dest.name) + '</div></div>';
-      return;
-    }
-    nav.arrived = false;
-    nextStepEl.className = 'next-step';
-
-    let remaining, eta;
-    if (nav.route) {
-      remaining = remainingDistance(userLocation, nav.route.coords);
-      eta = nav.route.distance > 0 ? nav.route.duration * (remaining / nav.route.distance) : remaining / WALK_SPEED;
-
-      const steps = nav.route.steps;
-      nav.stepIdx = advanceStep(userLocation, steps, nav.stepIdx);
-      const st = steps[nav.stepIdx];
-      if (st) {
-        const loc = st.maneuver.location;
-        const d = haversine(userLocation.lat, userLocation.lng, loc[1], loc[0]);
-        const isEnd = st.maneuver.type === 'arrive';
-        nextStepEl.innerHTML = '<div class="ns-arrow">' + stepArrow(st) + '</div><div><div class="ns-dist">' +
-          (d < 25 ? 'Now' : 'In ' + formatDistance(d)) + '</div><div class="ns-text">' +
-          esc(isEnd ? 'Arrive at ' + dest.name : stepText(st)) + '</div></div>';
-      }
-      stepListEl.querySelectorAll('li').forEach(li => {
-        li.classList.toggle('current', +li.dataset.s === nav.stepIdx);
-      });
-
-      // Wandered off the route? Ask for a fresh one (at most every 12 seconds)
-      const off = nearestOnRoute(userLocation, nav.route.coords).dist;
-      if (off > Math.max(35, userLocation.accuracy * 1.5) && Date.now() - nav.lastFetch > 12000) loadRoute();
-    } else {
-      remaining = straight;
-      eta = straight / WALK_SPEED;
-      nextStepEl.innerHTML = '<div class="ns-arrow">\u2191</div><div><div class="ns-dist">' + formatDistance(straight) + ' to go</div><div class="ns-text">Head towards ' + esc(dest.name) + '</div></div>';
-      if (nav.fallback && Date.now() - nav.lastFetch > 30000) loadRoute();   // try the route service again
-    }
-    document.getElementById('navDist').textContent = formatDistance(remaining);
-    document.getElementById('navEta').textContent = formatDuration(eta);
-  }
-
-  function endNavigation() {
-    nav = null;
-    routeGroup.clearLayers();
-    navPanel.hidden = true;
-    browsePanel.hidden = false;
-  }
-  document.getElementById('endNavBtn').addEventListener('click', endNavigation);
-
-  // =====================================================================
-  // START
-  // =====================================================================
-  renderList();
-  if (AUTO_LOCATE) startTracking();
-</script>
-
-</body>
-</html>
+    [CAMPUS_CORNERS[1][0], CAMPUS_CORNERS[1][1
