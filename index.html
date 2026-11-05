@@ -533,7 +533,12 @@
   const map = L.map('map', { maxBounds: campusBounds.pad(0.05), maxBoundsViscosity: 1.0, zoomSnap: 0.25 });
 
   // Zoom at which the WHOLE campus is visible (the furthest out a visitor can zoom)
-   function applyDefaultView() {
+    function containZoom() {
+    map.setMinZoom(0);
+    return map.getBoundsZoom(campusBounds);
+  }
+
+  function applyDefaultView() {
     settingView = true;
     map.invalidateSize();
     const contain = containZoom();
@@ -543,6 +548,22 @@
     settingView = false;
   }
   applyDefaultView();
+
+  // The panel can change size after the page loads (rotating the phone, the preview window
+  // settling, the on-screen keyboard). Re-fit the default view unless the visitor has
+  // already moved the map, and always keep the zoom limits correct.
+  let resizeTimer = null;
+  function onMapResized() {
+    if (!userMoved) { applyDefaultView(); return; }
+    settingView = true;
+    map.invalidateSize();
+    map.setMinZoom(containZoom());
+    settingView = false;
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(onMapResized, 120); })
+      .observe(document.querySelector('.map-wrap'));
+  }
 
   // The panel can change size after the page loads (rotating the phone, the preview window
   // settling, the on-screen keyboard). Re-fit the default view unless the visitor has
@@ -605,7 +626,7 @@
     if (userLocation) {
       dist = '<div class="pd">' + formatDistance(haversine(userLocation.lat, userLocation.lng, loc.lat, loc.lng)) + ' from you</div>';
     }
-        return '<div class="popup"><span class="tag">' + esc(CAT_LABEL[loc.category] || loc.category) + '</span>' +
+            return '<div class="popup"><span class="tag">' + esc(CAT_LABEL[loc.category] || loc.category) + '</span>' +
            '<h3>' + esc(loc.name) + '</h3><p>' + esc(loc.desc) + '</p>' + dist +
            '<button type="button" class="btn-primary sm" onclick="startNavigation(' + i + ')">Walk here &rarr;</button></div>';
   }
@@ -650,7 +671,7 @@
       return '<div class="loc">' +
         '<button type="button" class="loc-main" data-i="' + r.i + '">' +
           '<div class="loc-name">' + esc(loc.name) + '</div>' +
-          '<div class="loc-meta"><i class="dot ' + esc(loc.category) + '"></i><span>' + esc(CAT_LABEL[loc.category] || loc.category) + '</span>' + dist + '</div>' + +
+                   '<div class="loc-meta"><i class="dot ' + esc(loc.category) + '"></i><span>' + esc(CAT_LABEL[loc.category] || loc.category) + '</span>' + dist + '</div>' +
         '</button>' +
         '<button type="button" class="loc-go" data-go="' + r.i + '" aria-label="Directions to ' + esc(loc.name) + '">Go &rarr;</button>' +
       '</div>';
